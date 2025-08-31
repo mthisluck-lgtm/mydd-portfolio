@@ -1,9 +1,11 @@
-import os
 from flask import Flask, render_template_string
+import webbrowser
+import threading
+import time
 
 app = Flask(__name__)
 
-# Template HTML with loading screen and English translation
+# Template HTML with updated effects
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -28,7 +30,6 @@ HTML_TEMPLATE = """
             --shadow-color: rgba(0, 0, 0, 0.3);
             --card-bg: rgba(0, 0, 0, 0.6);
             --nav-bg: rgba(0, 0, 0, 0.9);
-            --loading-bg: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #000000 100%);
         }
 
         [data-theme="light"] {
@@ -47,7 +48,6 @@ HTML_TEMPLATE = """
             --shadow-color: rgba(0, 0, 0, 0.1);
             --card-bg: rgba(255, 255, 255, 0.8);
             --nav-bg: rgba(255, 255, 255, 0.95);
-            --loading-bg: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #ffffff 100%);
         }
 
         * {
@@ -86,8 +86,8 @@ HTML_TEMPLATE = """
             cursor: pointer;
             transition: all 0.3s ease;
             box-shadow: 0 8px 32px var(--shadow-color);
-            opacity: 0;
-            animation: slideDown 1s ease-out 0.8s forwards;
+            opacity: 1;
+            animation: slideDown 1s ease-out 0.3s;
         }
 
         .theme-toggle:hover {
@@ -142,77 +142,6 @@ HTML_TEMPLATE = """
             opacity: 0;
         }
 
-        /* Loading Screen */
-        .loading-screen {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: var(--loading-bg);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 9999;
-            opacity: 1;
-            transition: opacity 0.8s ease-out;
-        }
-
-        .loading-screen.fade-out {
-            opacity: 0;
-            pointer-events: none;
-        }
-
-        .loading-logo {
-            font-size: 4rem;
-            font-weight: 700;
-            background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 50%, var(--accent-tertiary) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            margin-bottom: 20px;
-            animation: pulse 2s infinite;
-        }
-
-        .loading-bar {
-            width: 200px;
-            height: 4px;
-            background: var(--border-color);
-            border-radius: 2px;
-            overflow: hidden;
-            margin-bottom: 20px;
-        }
-
-        .loading-progress {
-            height: 100%;
-            background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
-            border-radius: 2px;
-            width: 0%;
-            animation: loadingProgress 2s ease-out forwards;
-        }
-
-        .loading-text {
-            color: var(--text-secondary);
-            font-size: 1.1rem;
-            animation: fadeInOut 1.5s infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-        }
-
-        @keyframes loadingProgress {
-            0% { width: 0%; }
-            100% { width: 100%; }
-        }
-
-        @keyframes fadeInOut {
-            0%, 100% { opacity: 0.5; }
-            50% { opacity: 1; }
-        }
-
         .section {
             padding: 100px 0;
             position: relative;
@@ -243,6 +172,22 @@ HTML_TEMPLATE = """
             );
         }
 
+        /* Faulty Terminal Background */
+        .faulty-terminal-background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            opacity: 0.7;
+        }
+
+        .faulty-terminal-container canvas {
+            width: 100%;
+            height: 100%;
+        }
+
         /* Background Animated Particles */
         .bg-particles {
             position: fixed;
@@ -251,7 +196,7 @@ HTML_TEMPLATE = """
             width: 100%;
             height: 100%;
             pointer-events: none;
-            z-index: 1;
+            z-index: 2;
         }
 
         .particle {
@@ -294,8 +239,8 @@ HTML_TEMPLATE = """
             transition: all 0.3s ease;
             display: flex;
             align-items: center;
-            opacity: 0;
-            animation: slideDown 1s ease-out 0.5s forwards;
+            opacity: 1;
+            animation: slideDown 1s ease-out 0.2s;
         }
 
         @keyframes slideDown {
@@ -375,79 +320,47 @@ HTML_TEMPLATE = """
             overflow: hidden;
         }
 
-        .hero::before {
-            content: '';
-            position: absolute;
-            width: 200%;
-            height: 200%;
-            background: radial-gradient(circle, var(--particle-color) 1px, transparent 1px);
-            background-size: 50px 50px;
-            animation: float 20s infinite linear;
-        }
-
-        @keyframes float {
-            0% { transform: translate(-50px, -50px) rotate(0deg); }
-            100% { transform: translate(-50px, -50px) rotate(360deg); }
-        }
-
         .hero-content {
             position: relative;
-            z-index: 2;
+            z-index: 10;
             max-width: 800px;
             padding: 0 20px;
         }
 
-        .hero h1 {
-            font-size: clamp(3rem, 8vw, 8rem);
-            font-weight: 700;
-            background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 50%, var(--accent-tertiary) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            margin-bottom: 20px;
-            text-shadow: none;
-            opacity: 0;
-            animation: titleReveal 2s ease-out 1s forwards;
+        /* Text Trail Container */
+        .text-trail-container {
+            width: 100%;
+            height: 200px;
+            position: relative;
+            margin-bottom: 30px;
         }
 
-        @keyframes titleReveal {
-            0% {
-                opacity: 0;
-                transform: scale(0.5) rotateY(90deg);
-                filter: blur(20px);
-            }
-            50% {
-                opacity: 0.7;
-                transform: scale(1.1) rotateY(45deg);
-                filter: blur(5px);
-            }
-            100% {
-                opacity: 1;
-                transform: scale(1) rotateY(0deg);
-                filter: blur(0px);
-            }
+        .text-trail {
+            width: 100%;
+            height: 100%;
+        }
+
+        .text-trail canvas {
+            width: 100% !important;
+            height: 100% !important;
         }
 
         .hero p {
             font-size: clamp(1.2rem, 3vw, 2rem);
             color: var(--text-secondary);
             margin-bottom: 40px;
-            opacity: 0;
-            animation: typeWriter 3s ease-out 2s forwards;
+            opacity: 1;
+            animation: fadeInUp 1s ease-out 0.5s both;
         }
 
-        @keyframes typeWriter {
-            0% {
+        @keyframes fadeInUp {
+            from {
                 opacity: 0;
-                width: 0;
+                transform: translateY(30px);
             }
-            1% {
+            to {
                 opacity: 1;
-                width: 0;
-            }
-            100% {
-                opacity: 1;
-                width: 100%;
+                transform: translateY(0);
             }
         }
 
@@ -466,16 +379,8 @@ HTML_TEMPLATE = """
             transition: all 0.3s ease;
             position: relative;
             overflow: hidden;
-            opacity: 0;
-            transform: translateY(50px);
-            animation: buttonSlideUp 1s ease-out 4s forwards;
-        }
-
-        @keyframes buttonSlideUp {
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+            opacity: 1;
+            animation: fadeInUp 1s ease-out 0.8s both;
         }
 
         .cta-button::before {
@@ -1084,91 +989,54 @@ HTML_TEMPLATE = """
         .contact-links {
             display: flex;
             justify-content: center;
+            gap: 30px;
             margin-top: 40px;
         }
 
-        .discord-link {
-            width: 120px;
-            height: 120px;
+        .contact-link {
+            width: 80px;
+            height: 80px;
             background: var(--card-bg);
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: #5865F2;
+            color: var(--accent-primary);
             text-decoration: none;
             transition: all 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-            border: 3px solid var(--border-color);
-            font-size: 3rem;
+            border: 2px solid var(--border-color);
+            font-size: 1.5rem;
             position: relative;
             overflow: hidden;
-            box-shadow: 
-                0 15px 35px rgba(88, 101, 242, 0.2),
-                0 8px 20px var(--shadow-color);
         }
 
-        [data-theme="light"] .discord-link {
-            background: rgba(255, 255, 255, 0.95);
+        [data-theme="light"] .contact-link {
+            background: rgba(255, 255, 255, 0.9);
         }
 
-        .discord-link::before {
+        .contact-link::before {
             content: '';
             position: absolute;
             top: 50%;
             left: 50%;
             width: 0;
             height: 0;
-            background: rgba(88, 101, 242, 0.1);
+            background: var(--particle-color);
             border-radius: 50%;
-            transition: all 0.8s ease;
+            transition: all 0.6s ease;
             transform: translate(-50%, -50%);
         }
 
-        .discord-link::after {
-            content: '';
-            position: absolute;
-            top: -50%;
-            left: -50%;
+        .contact-link:hover::before {
             width: 200%;
             height: 200%;
-            background: conic-gradient(transparent, rgba(88, 101, 242, 0.2), transparent);
-            animation: rotateDiscord 4s linear infinite;
-            opacity: 0;
-            transition: opacity 0.5s ease;
         }
 
-        @keyframes rotateDiscord {
-            100% { transform: rotate(360deg); }
-        }
-
-        .discord-link:hover::before {
-            width: 300%;
-            height: 300%;
-        }
-
-        .discord-link:hover::after {
-            opacity: 1;
-        }
-
-        .discord-link:hover {
-            transform: translateY(-10px) scale(1.15) rotate(-5deg);
-            background: rgba(88, 101, 242, 0.1);
-            box-shadow: 
-                0 25px 60px rgba(88, 101, 242, 0.4),
-                0 15px 40px var(--shadow-color);
-            border-color: #5865F2;
-            color: #5865F2;
-        }
-
-        .discord-icon {
-            position: relative;
-            z-index: 10;
-            transition: all 0.3s ease;
-        }
-
-        .discord-link:hover .discord-icon {
-            transform: scale(1.2) rotate(10deg);
-            filter: drop-shadow(0 0 15px rgba(88, 101, 242, 0.6));
+        .contact-link:hover {
+            transform: translateY(-5px) scale(1.1) rotate(10deg);
+            background: var(--border-color);
+            box-shadow: 0 15px 40px rgba(8, 145, 178, 0.3);
+            border-color: var(--accent-primary);
         }
 
         /* Progress Bar */
@@ -1194,18 +1062,6 @@ HTML_TEMPLATE = """
             z-index: 9998;
             opacity: 0;
             transition: opacity 0.3s ease;
-        }
-
-        /* Matrix Rain Effect */
-        .matrix-rain {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: 1;
-            opacity: 0.1;
         }
 
         /* Hologram Effect */
@@ -1235,33 +1091,6 @@ HTML_TEMPLATE = """
         @keyframes hologramSweep {
             0% { left: -100%; }
             100% { left: 100%; }
-        }
-
-        /* Neon Glow Effect */
-        .neon-glow {
-            text-shadow: 
-                0 0 5px var(--accent-primary),
-                0 0 10px var(--accent-primary),
-                0 0 15px var(--accent-primary),
-                0 0 20px var(--accent-primary);
-            animation: neonFlicker 2s infinite alternate;
-        }
-
-        @keyframes neonFlicker {
-            0%, 100% {
-                text-shadow: 
-                    0 0 5px var(--accent-primary),
-                    0 0 10px var(--accent-primary),
-                    0 0 15px var(--accent-primary),
-                    0 0 20px var(--accent-primary);
-            }
-            50% {
-                text-shadow: 
-                    0 0 2px var(--accent-primary),
-                    0 0 5px var(--accent-primary),
-                    0 0 8px var(--accent-primary),
-                    0 0 12px var(--accent-primary);
-            }
         }
 
         /* Data Stream Effect */
@@ -1365,119 +1194,20 @@ HTML_TEMPLATE = """
             }
 
             .contact-links {
-                justify-content: center;
+                gap: 20px;
             }
 
-            .discord-link {
-                width: 100px;
-                height: 100px;
-                font-size: 2.5rem;
+            .contact-link {
+                width: 60px;
+                height: 60px;
             }
 
-            .discord-icon {
-                width: 50px;
-                height: 50px;
-            }
-
-            .loading-logo {
-                font-size: 3rem;
-            }
-        }
-
-        /* Typing Effect */
-        .typing-effect {
-            overflow: hidden;
-            white-space: nowrap;
-            border-right: 3px solid var(--accent-primary);
-            width: 0;
-            animation: typing 3s steps(40, end) forwards, blink 0.8s infinite;
-        }
-
-        @keyframes typing {
-            from { width: 0 }
-            to { width: 100% }
-        }
-
-        @keyframes blink {
-            from, to { border-color: transparent }
-            50% { border-color: var(--accent-primary) }
-        }
-
-        /* Glitch Effect for Titles */
-        .glitch {
-            position: relative;
-        }
-
-        .glitch::before,
-        .glitch::after {
-            content: attr(data-text);
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: inherit;
-            opacity: 0;
-        }
-
-        .glitch::before {
-            animation: glitch1 0.8s infinite;
-            color: #ff0000;
-            z-index: -1;
-        }
-
-        .glitch::after {
-            animation: glitch2 0.8s infinite;
-            color: #00ff00;
-            z-index: -2;
-        }
-
-        @keyframes glitch1 {
-            0%, 100% {
-                transform: translate(0);
-                opacity: 0;
-            }
-            20% {
-                transform: translate(-2px, 2px);
-                opacity: 0.8;
-            }
-            40% {
-                transform: translate(-2px, -2px);
-                opacity: 0.8;
-            }
-            60% {
-                transform: translate(2px, 2px);
-                opacity: 0.8;
-            }
-            80% {
-                transform: translate(2px, -2px);
-                opacity: 0.8;
-            }
-        }
-
-        @keyframes glitch2 {
-            0%, 100% {
-                transform: translate(0);
-                opacity: 0;
-            }
-            20% {
-                transform: translate(2px, 2px);
-                opacity: 0.6;
-            }
-            40% {
-                transform: translate(2px, -2px);
-                opacity: 0.6;
-            }
-            60% {
-                transform: translate(-2px, 2px);
-                opacity: 0.6;
-            }
-            80% {
-                transform: translate(-2px, -2px);
-                opacity: 0.6;
+            .text-trail-container {
+                height: 150px;
             }
         }
     </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body data-theme="dark">
     <!-- Theme Toggle Button -->
@@ -1494,20 +1224,11 @@ HTML_TEMPLATE = """
         </div>
     </div>
 
-    <!-- Loading Screen -->
-    <div class="loading-screen" id="loadingScreen">
-        <div class="loading-logo">Mydd</div>
-        <div class="loading-bar">
-            <div class="loading-progress"></div>
-        </div>
-        <div class="loading-text">Loading Portfolio...</div>
-    </div>
-
     <!-- Progress Bar -->
     <div class="progress-bar"></div>
 
-    <!-- Matrix Rain Canvas -->
-    <canvas class="matrix-rain" id="matrix-canvas"></canvas>
+    <!-- Faulty Terminal Background -->
+    <div class="faulty-terminal-background" id="faultyTerminal"></div>
 
     <!-- Background Particles -->
     <div class="bg-particles" id="particles"></div>
@@ -1526,8 +1247,8 @@ HTML_TEMPLATE = """
     <!-- Hero Section -->
     <section id="home" class="hero">
         <div class="hero-content">
-            <h1 class="glitch neon-glow" data-text="Mydd">Mydd</h1>
-            <p class="typing-effect">Web Developer & Community Manager</p>
+            <div class="text-trail-container" id="textTrailContainer"></div>
+            <p>Web Developer & Community Manager</p>
             <a href="#about" class="cta-button hologram">Discover My Work</a>
         </div>
     </section>
@@ -1613,18 +1334,10 @@ HTML_TEMPLATE = """
                     Do you have a web project or need help managing your Discord community? Feel free to contact me to discuss your needs.
                 </p>
                 <div class="contact-links">
-                    <a href="https://discord.gg/JyzVnvwV" target="_blank" class="discord-link reveal-scale stagger-1" title="Join my Discord">
-                        <svg class="discord-icon" width="60" height="60" viewBox="0 0 71 55" fill="currentColor">
-                            <g clip-path="url(#clip0)">
-                                <path d="M60.1045 4.8978C55.5792 2.8214 50.7265 1.2916 45.6527 0.41542C45.5603 0.39851 45.468 0.440769 45.4204 0.525289C44.7963 1.6353 44.105 3.0834 43.6209 4.2216C38.1637 3.4046 32.7345 3.4046 27.3892 4.2216C26.905 3.0581 26.1886 1.6353 25.5617 0.525289C25.5141 0.443589 25.4218 0.40133 25.3294 0.41542C20.2584 1.2888 15.4057 2.8186 10.8776 4.8978C10.8384 4.9147 10.8048 4.9429 10.7825 4.9795C1.57795 18.7309 -0.943561 32.1443 0.293408 45.3914C0.299005 45.4562 0.335386 45.5182 0.385761 45.5576C6.45866 50.0174 12.3413 52.7249 18.1147 54.5195C18.2071 54.5477 18.305 54.5139 18.3638 54.4378C19.7295 52.5728 20.9469 50.6063 21.9907 48.5383C22.0523 48.4172 21.9935 48.2735 21.8676 48.2256C19.9366 47.4931 18.0979 46.6 16.3292 45.5858C16.1893 45.5041 16.1781 45.304 16.3068 45.2082C16.679 44.9293 17.0513 44.6391 17.4067 44.3461C17.471 44.2926 17.5606 44.2813 17.6362 44.3151C29.2558 49.6202 41.8354 49.6202 53.3179 44.3151C53.3935 44.2785 53.4831 44.2898 53.5502 44.3433C53.9057 44.6363 54.2779 44.9293 54.6529 45.2082C54.7816 45.304 54.7732 45.5041 54.6333 45.5858C52.8646 46.6197 51.0259 47.4931 49.0921 48.2228C48.9662 48.2707 48.9102 48.4172 48.9718 48.5383C50.038 50.6034 51.2554 52.5699 52.5959 54.435C52.6519 54.5139 52.7526 54.5477 52.845 54.5195C58.6464 52.7249 64.529 50.0174 70.6019 45.5576C70.6551 45.5182 70.6887 45.459 70.6943 45.3942C72.1747 30.0791 68.2147 16.7757 60.1968 4.9823C60.1772 4.9429 60.1437 4.9147 60.1045 4.8978ZM23.7259 37.3253C20.2276 37.3253 17.3451 34.1136 17.3451 30.1693C17.3451 26.225 20.1717 23.0133 23.7259 23.0133C27.308 23.0133 30.1626 26.2532 30.1066 30.1693C30.1066 34.1136 27.28 37.3253 23.7259 37.3253ZM47.3178 37.3253C43.8196 37.3253 40.9371 34.1136 40.9371 30.1693C40.9371 26.225 43.7636 23.0133 47.3178 23.0133C50.9 23.0133 53.7545 26.2532 53.6986 30.1693C53.6986 34.1136 50.9 37.3253 47.3178 37.3253Z" fill="currentColor"/>
-                            </g>
-                            <defs>
-                                <clipPath id="clip0">
-                                    <rect width="71" height="55" fill="white"/>
-                                </clipPath>
-                            </defs>
-                        </svg>
-                    </a>
+                    <a href="#" class="contact-link reveal-scale stagger-1" title="Discord">💬</a>
+                    <a href="mailto:contact@mydd.dev" class="contact-link reveal-scale stagger-2" title="Email">📧</a>
+                    <a href="#" class="contact-link reveal-scale stagger-3" title="GitHub">💻</a>
+                    <a href="#" class="contact-link reveal-scale stagger-4" title="LinkedIn">💼</a>
                 </div>
             </div>
         </div>
@@ -1653,41 +1366,574 @@ HTML_TEMPLATE = """
             applyTheme(theme) {
                 document.body.setAttribute('data-theme', theme);
                 
-                // Update matrix canvas color
-                const canvas = document.getElementById('matrix-canvas');
-                if (canvas && window.matrixCtx) {
-                    if (theme === 'light') {
-                        window.matrixColor = '#0891b2';
-                    } else {
-                        window.matrixColor = '#3b82f6';
-                    }
+                // Update faulty terminal theme
+                if (window.faultyTerminalInstance) {
+                    const tintColor = theme === 'light' ? '#0891b2' : '#3b82f6';
+                    window.faultyTerminalInstance.updateTint(tintColor);
+                }
+
+                // Update text trail theme
+                if (window.textTrailInstance) {
+                    const textColor = theme === 'light' ? '#0891b2' : '#3b82f6';
+                    window.textTrailInstance.updateColor(textColor);
                 }
             }
         }
 
-        // Loading Screen Manager
-        class LoadingManager {
-            constructor() {
+        // Text Trail Implementation (adapted from React)
+        class TextTrail {
+            constructor(container, options = {}) {
+                this.container = container;
+                this.options = {
+                    text: options.text || "Mydd",
+                    fontFamily: options.fontFamily || "Figtree",
+                    fontWeight: options.fontWeight || "900",
+                    noiseFactor: options.noiseFactor || 1,
+                    noiseScale: options.noiseScale || 0.0005,
+                    rgbPersistFactor: options.rgbPersistFactor || 0.98,
+                    alphaPersistFactor: options.alphaPersistFactor || 0.95,
+                    startColor: options.startColor || "#3b82f6",
+                    textColor: options.textColor || "#3b82f6",
+                    backgroundColor: options.backgroundColor || 0x271e37,
+                    supersample: options.supersample || 2,
+                    ...options
+                };
+                
                 this.init();
             }
 
             init() {
-                setTimeout(() => {
-                    this.hideLoadingScreen();
-                }, 2200);
+                const { w, h } = this.getSize();
+                
+                this.renderer = new THREE.WebGLRenderer({ antialias: true });
+                this.renderer.setClearColor(new THREE.Color(this.options.backgroundColor), 1);
+                this.renderer.setPixelRatio(window.devicePixelRatio || 1);
+                this.renderer.setSize(w, h);
+                this.container.appendChild(this.renderer.domElement);
+
+                this.scene = new THREE.Scene();
+                this.fluidScene = new THREE.Scene();
+                this.clock = new THREE.Clock();
+                
+                this.cam = new THREE.OrthographicCamera(-w/2, w/2, h/2, -h/2, 0.1, 10);
+                this.cam.position.z = 1;
+
+                this.rt0 = new THREE.WebGLRenderTarget(w, h);
+                this.rt1 = this.rt0.clone();
+
+                this.setupShaders();
+                this.setupGeometry();
+                this.setupText();
+                this.setupEventListeners();
+                this.animate();
             }
 
-            hideLoadingScreen() {
-                const loadingScreen = document.getElementById('loadingScreen');
-                loadingScreen.classList.add('fade-out');
+            getSize() {
+                return {
+                    w: this.container.clientWidth,
+                    h: this.container.clientHeight
+                };
+            }
+
+            setupShaders() {
+                const vertexShader = `
+                    varying vec2 v_uv;
+                    void main(){
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                        v_uv = uv;
+                    }
+                `;
+
+                const persistFragmentShader = `
+                    uniform sampler2D sampler;
+                    uniform float time;
+                    uniform vec2 mousePos;
+                    uniform float noiseFactor, noiseScale, rgbPersistFactor, alphaPersistFactor;
+                    varying vec2 v_uv;
+                    
+                    vec3 mod289(vec3 x){return x-floor(x*(1./289.))*289.;}
+                    vec4 mod289(vec4 x){return x-floor(x*(1./289.))*289.;}
+                    vec4 permute(vec4 x){return mod289(((x*34.)+1.)*x);}
+                    float snoise3(vec3 v){
+                        const vec2 C=vec2(1./6.,1./3.);
+                        const vec4 D=vec4(0.,.5,1.,2.);
+                        vec3 i=floor(v+dot(v,C.yyy));
+                        vec3 x0=v-i+dot(i,C.xxx);
+                        vec3 g=step(x0.yzx,x0.xyz);
+                        vec3 l=1.-g;
+                        vec3 i1=min(g.xyz,l.zxy);
+                        vec3 i2=max(g.xyz,l.zxy);
+                        vec3 x1=x0-i1+C.xxx;
+                        vec3 x2=x0-i2+C.yyy;
+                        vec3 x3=x0-D.yyy;
+                        i=mod289(i);
+                        vec4 p=permute(permute(permute(i.z+vec4(0.,i1.z,i2.z,1.))+i.y+vec4(0.,i1.y,i2.y,1.))+i.x+vec4(0.,i1.x,i2.x,1.));
+                        float n_=1./7.; vec3 ns=n_*D.wyz-D.xzx;
+                        vec4 j=p-49.*floor(p*ns.z*ns.z);
+                        vec4 x_=floor(j*ns.z);
+                        vec4 y_=floor(j-7.*x_);
+                        vec4 x=x_*ns.x+ns.yyyy;
+                        vec4 y=y_*ns.x+ns.yyyy;
+                        vec4 h=1.-abs(x)-abs(y);
+                        vec4 b0=vec4(x.xy,y.xy);
+                        vec4 b1=vec4(x.zw,y.zw);
+                        vec4 s0=floor(b0)*2.+1.;
+                        vec4 s1=floor(b1)*2.+1.;
+                        vec4 sh=-step(h,vec4(0.));
+                        vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy;
+                        vec4 a1=b1.xzyw+s1.xzyw*sh.zzww;
+                        vec3 p0=vec3(a0.xy,h.x);
+                        vec3 p1=vec3(a0.zw,h.y);
+                        vec3 p2=vec3(a1.xy,h.z);
+                        vec3 p3=vec3(a1.zw,h.w);
+                        vec4 norm=inversesqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
+                        p0*=norm.x; p1*=norm.y; p2*=norm.z; p3*=norm.w;
+                        vec4 m=max(.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.);
+                        m*=m;
+                        return 42.*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
+                    }
+                    
+                    void main(){
+                        float a=snoise3(vec3(v_uv*noiseFactor,time*.1))*noiseScale;
+                        float b=snoise3(vec3(v_uv*noiseFactor,time*.1+100.))*noiseScale;
+                        vec4 t=texture2D(sampler,v_uv+vec2(a,b)+mousePos*.005);
+                        gl_FragColor=vec4(t.xyz*rgbPersistFactor,alphaPersistFactor);
+                    }
+                `;
+
+                const textFragmentShader = `
+                    uniform sampler2D sampler;
+                    uniform vec3 color;
+                    varying vec2 v_uv;
+                    void main(){
+                        vec4 t=texture2D(sampler,v_uv);
+                        float alpha=smoothstep(0.1,0.9,t.a);
+                        if(alpha<0.01)discard;
+                        gl_FragColor=vec4(color,alpha);
+                    }
+                `;
+
+                const { w, h } = this.getSize();
                 
-                setTimeout(() => {
-                    loadingScreen.style.display = 'none';
-                    document.body.style.overflow = 'auto';
-                    new AdvancedAnimations();
-                    new InteractionEffects();
-                    new ThemeManager();
-                }, 800);
+                this.quadMaterial = new THREE.ShaderMaterial({
+                    uniforms: {
+                        sampler: { value: null },
+                        time: { value: 0 },
+                        mousePos: { value: new THREE.Vector2(-1, 1) },
+                        noiseFactor: { value: this.options.noiseFactor },
+                        noiseScale: { value: this.options.noiseScale },
+                        rgbPersistFactor: { value: this.options.rgbPersistFactor },
+                        alphaPersistFactor: { value: this.options.alphaPersistFactor },
+                    },
+                    vertexShader,
+                    fragmentShader: persistFragmentShader,
+                    transparent: true,
+                });
+
+                this.labelMaterial = new THREE.ShaderMaterial({
+                    uniforms: {
+                        sampler: { value: null },
+                        color: { value: this.hexToVec3(this.options.textColor) },
+                    },
+                    vertexShader,
+                    fragmentShader: textFragmentShader,
+                    transparent: true,
+                });
+            }
+
+            setupGeometry() {
+                const { w, h } = this.getSize();
+                
+                this.quad = new THREE.Mesh(
+                    new THREE.PlaneGeometry(w, h),
+                    this.quadMaterial
+                );
+                this.fluidScene.add(this.quad);
+
+                this.label = new THREE.Mesh(
+                    new THREE.PlaneGeometry(Math.min(w, h), Math.min(w, h)),
+                    this.labelMaterial
+                );
+                this.scene.add(this.label);
+            }
+
+            setupText() {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d', { alpha: true, colorSpace: 'srgb' });
+                
+                const max = Math.min(4096, 2048);
+                const pixelRatio = (window.devicePixelRatio || 1) * this.options.supersample;
+                const canvasSize = max * pixelRatio;
+                
+                canvas.width = canvasSize;
+                canvas.height = canvasSize;
+                canvas.style.width = `${max}px`;
+                canvas.style.height = `${max}px`;
+
+                ctx.setTransform(1, 0, 0, 1, 0, 0);
+                ctx.scale(pixelRatio, pixelRatio);
+                ctx.clearRect(0, 0, max, max);
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
+                ctx.shadowColor = 'rgba(255,255,255,0.3)';
+                ctx.shadowBlur = 2;
+                ctx.fillStyle = '#fff';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+
+                const refSize = 250;
+                ctx.font = `${this.options.fontWeight} ${refSize}px ${this.options.fontFamily}`;
+                const width = ctx.measureText(this.options.text).width;
+                ctx.font = `${this.options.fontWeight} ${(refSize * max) / width}px ${this.options.fontFamily}`;
+
+                const cx = max / 2, cy = max / 2;
+                const offs = [
+                    [0, 0], [0.1, 0], [-0.1, 0], [0, 0.1], [0, -0.1],
+                    [0.1, 0.1], [-0.1, -0.1], [0.1, -0.1], [-0.1, 0.1]
+                ];
+                ctx.globalAlpha = 1 / offs.length;
+                offs.forEach(([dx, dy]) => ctx.fillText(this.options.text, cx + dx, cy + dy));
+                ctx.globalAlpha = 1;
+
+                const texture = new THREE.CanvasTexture(canvas);
+                texture.generateMipmaps = true;
+                texture.minFilter = THREE.LinearMipmapLinearFilter;
+                texture.magFilter = THREE.LinearFilter;
+                this.labelMaterial.uniforms.sampler.value = texture;
+            }
+
+            setupEventListeners() {
+                this.mouse = [0, 0];
+                this.target = [0, 0];
+                
+                this.onMove = (e) => {
+                    const r = this.container.getBoundingClientRect();
+                    this.target[0] = ((e.clientX - r.left) / r.width) * 2 - 1;
+                    this.target[1] = ((r.top + r.height - e.clientY) / r.height) * 2 - 1;
+                };
+                
+                this.container.addEventListener('pointermove', this.onMove);
+
+                this.resizeObserver = new ResizeObserver(() => {
+                    const { w, h } = this.getSize();
+                    this.renderer.setSize(w, h);
+                    this.cam.left = -w / 2;
+                    this.cam.right = w / 2;
+                    this.cam.top = h / 2;
+                    this.cam.bottom = -h / 2;
+                    this.cam.updateProjectionMatrix();
+                    
+                    this.quad.geometry.dispose();
+                    this.quad.geometry = new THREE.PlaneGeometry(w, h);
+                    this.rt0.setSize(w, h);
+                    this.rt1.setSize(w, h);
+                    this.label.geometry.dispose();
+                    this.label.geometry = new THREE.PlaneGeometry(Math.min(w, h), Math.min(w, h));
+                });
+                this.resizeObserver.observe(this.container);
+            }
+
+            hexToVec3(hex) {
+                let h = hex.replace("#", "");
+                if (h.length === 3) h = h.split("").map((c) => c + c).join("");
+                const n = parseInt(h, 16);
+                return new THREE.Vector3(
+                    ((n >> 16) & 255) / 255,
+                    ((n >> 8) & 255) / 255,
+                    (n & 255) / 255
+                );
+            }
+
+            animate() {
+                if (!this.renderer) return;
+                
+                const dt = this.clock.getDelta();
+                const speed = dt * 5;
+                this.mouse[0] += (this.target[0] - this.mouse[0]) * speed;
+                this.mouse[1] += (this.target[1] - this.mouse[1]) * speed;
+
+                this.quadMaterial.uniforms.mousePos.value.set(this.mouse[0], this.mouse[1]);
+                this.quadMaterial.uniforms.sampler.value = this.rt1.texture;
+                this.quadMaterial.uniforms.time.value = this.clock.getElapsedTime();
+
+                this.renderer.autoClearColor = false;
+                this.renderer.setRenderTarget(this.rt0);
+                this.renderer.clearColor();
+                this.renderer.render(this.fluidScene, this.cam);
+                this.renderer.render(this.scene, this.cam);
+                this.renderer.setRenderTarget(null);
+                this.renderer.render(this.fluidScene, this.cam);
+                this.renderer.render(this.scene, this.cam);
+                
+                [this.rt0, this.rt1] = [this.rt1, this.rt0];
+                
+                requestAnimationFrame(() => this.animate());
+            }
+
+            updateColor(color) {
+                this.labelMaterial.uniforms.color.value = this.hexToVec3(color);
+            }
+
+            destroy() {
+                if (this.resizeObserver) this.resizeObserver.disconnect();
+                this.container.removeEventListener('pointermove', this.onMove);
+                if (this.renderer) {
+                    this.renderer.dispose();
+                    if (this.renderer.domElement.parentNode) {
+                        this.renderer.domElement.parentNode.removeChild(this.renderer.domElement);
+                    }
+                }
+                this.rt0?.dispose();
+                this.rt1?.dispose();
+                this.quadMaterial?.dispose();
+                this.labelMaterial?.dispose();
+                this.quad?.geometry?.dispose();
+                this.label?.geometry?.dispose();
+            }
+        }
+
+        // Faulty Terminal Implementation (adapted from React with OGL)
+        class FaultyTerminal {
+            constructor(container, options = {}) {
+                this.container = container;
+                this.options = {
+                    scale: options.scale || 1,
+                    gridMul: options.gridMul || [2, 1],
+                    digitSize: options.digitSize || 1.5,
+                    timeScale: options.timeScale || 0.3,
+                    scanlineIntensity: options.scanlineIntensity || 0.3,
+                    glitchAmount: options.glitchAmount || 1,
+                    flickerAmount: options.flickerAmount || 1,
+                    noiseAmp: options.noiseAmp || 0,
+                    chromaticAberration: options.chromaticAberration || 0,
+                    dither: options.dither || 0,
+                    curvature: options.curvature || 0.2,
+                    tint: options.tint || "#3b82f6",
+                    mouseReact: options.mouseReact !== false,
+                    mouseStrength: options.mouseStrength || 0.2,
+                    brightness: options.brightness || 1,
+                    dpr: Math.min(window.devicePixelRatio || 1, 2),
+                    ...options
+                };
+                
+                this.init();
+            }
+
+            init() {
+                // Create canvas manually since we don't have OGL
+                this.canvas = document.createElement('canvas');
+                this.gl = this.canvas.getContext('webgl') || this.canvas.getContext('experimental-webgl');
+                
+                if (!this.gl) {
+                    console.warn('WebGL not supported, falling back to simple background');
+                    this.createFallback();
+                    return;
+                }
+
+                this.container.appendChild(this.canvas);
+                this.setupWebGL();
+                this.setupEventListeners();
+                this.resize();
+                this.animate();
+            }
+
+            createFallback() {
+                // Simple animated background fallback
+                this.container.style.background = `
+                    linear-gradient(45deg, ${this.options.tint}22 0%, transparent 50%, ${this.options.tint}11 100%),
+                    repeating-linear-gradient(
+                        90deg,
+                        ${this.options.tint}05 0px,
+                        ${this.options.tint}10 2px,
+                        transparent 4px,
+                        transparent 8px
+                    )
+                `;
+                this.container.style.animation = 'terminalFallback 10s infinite linear';
+                
+                // Add fallback animation
+                if (!document.getElementById('fallback-style')) {
+                    const style = document.createElement('style');
+                    style.id = 'fallback-style';
+                    style.textContent = `
+                        @keyframes terminalFallback {
+                            0% { background-position: 0% 0%, 0px 0px; }
+                            100% { background-position: 100% 100%, 20px 0px; }
+                        }
+                    `;
+                    document.head.appendChild(style);
+                }
+            }
+
+            setupWebGL() {
+                // Simple shader setup for terminal effect
+                const vertexShaderSource = `
+                    attribute vec2 position;
+                    varying vec2 vUv;
+                    void main() {
+                        vUv = (position + 1.0) * 0.5;
+                        gl_Position = vec4(position, 0.0, 1.0);
+                    }
+                `;
+
+                const fragmentShaderSource = `
+                    precision mediump float;
+                    varying vec2 vUv;
+                    uniform float time;
+                    uniform vec2 resolution;
+                    uniform vec3 tint;
+                    uniform float brightness;
+                    
+                    float random(vec2 st) {
+                        return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
+                    }
+                    
+                    float noise(vec2 st) {
+                        vec2 i = floor(st);
+                        vec2 f = fract(st);
+                        vec2 u = f*f*(3.0-2.0*f);
+                        return mix( mix( random( i + vec2(0.0,0.0) ),
+                                        random( i + vec2(1.0,0.0) ), u.x),
+                                   mix( random( i + vec2(0.0,1.0) ),
+                                        random( i + vec2(1.0,1.0) ), u.x), u.y);
+                    }
+                    
+                    void main() {
+                        vec2 uv = vUv;
+                        vec2 grid = uv * vec2(40.0, 25.0);
+                        vec2 gridCell = floor(grid);
+                        
+                        float cellNoise = random(gridCell + floor(time * 2.0));
+                        float intensity = step(0.7, cellNoise) * 0.8;
+                        
+                        // Scanlines
+                        float scanline = sin(uv.y * resolution.y * 2.0) * 0.3 + 0.7;
+                        
+                        // Flickering
+                        float flicker = (sin(time * 10.0) + 1.0) * 0.5 * 0.1 + 0.9;
+                        
+                        vec3 color = tint * intensity * scanline * flicker * brightness;
+                        gl_FragColor = vec4(color, 1.0);
+                    }
+                `;
+
+                // Create and compile shaders
+                const vertexShader = this.createShader(this.gl.VERTEX_SHADER, vertexShaderSource);
+                const fragmentShader = this.createShader(this.gl.FRAGMENT_SHADER, fragmentShaderSource);
+                
+                // Create program
+                this.program = this.gl.createProgram();
+                this.gl.attachShader(this.program, vertexShader);
+                this.gl.attachShader(this.program, fragmentShader);
+                this.gl.linkProgram(this.program);
+                
+                // Get uniform locations
+                this.uniforms = {
+                    time: this.gl.getUniformLocation(this.program, 'time'),
+                    resolution: this.gl.getUniformLocation(this.program, 'resolution'),
+                    tint: this.gl.getUniformLocation(this.program, 'tint'),
+                    brightness: this.gl.getUniformLocation(this.program, 'brightness')
+                };
+                
+                // Create geometry
+                const positions = new Float32Array([
+                    -1, -1,  1, -1,  -1, 1,
+                    -1, 1,   1, -1,   1, 1
+                ]);
+                
+                this.positionBuffer = this.gl.createBuffer();
+                this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.positionBuffer);
+                this.gl.bufferData(this.gl.ARRAY_BUFFER, positions, this.gl.STATIC_DRAW);
+                
+                this.startTime = Date.now();
+            }
+
+            createShader(type, source) {
+                const shader = this.gl.createShader(type);
+                this.gl.shaderSource(shader, source);
+                this.gl.compileShader(shader);
+                
+                if (!this.gl.getShaderParameter(shader, this.gl.COMPILE_STATUS)) {
+                    console.error('Shader compilation error:', this.gl.getShaderInfoLog(shader));
+                    this.gl.deleteShader(shader);
+                    return null;
+                }
+                
+                return shader;
+            }
+
+            setupEventListeners() {
+                this.resizeObserver = new ResizeObserver(() => this.resize());
+                this.resizeObserver.observe(this.container);
+            }
+
+            resize() {
+                const rect = this.container.getBoundingClientRect();
+                this.canvas.width = rect.width * this.options.dpr;
+                this.canvas.height = rect.height * this.options.dpr;
+                this.canvas.style.width = rect.width + 'px';
+                this.canvas.style.height = rect.height + 'px';
+                
+                if (this.gl) {
+                    this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+                }
+            }
+
+            hexToRgb(hex) {
+                let h = hex.replace("#", "");
+                if (h.length === 3) h = h.split("").map((c) => c + c).join("");
+                const n = parseInt(h, 16);
+                return [
+                    ((n >> 16) & 255) / 255,
+                    ((n >> 8) & 255) / 255,
+                    (n & 255) / 255
+                ];
+            }
+
+            animate() {
+                if (!this.gl || !this.program) {
+                    requestAnimationFrame(() => this.animate());
+                    return;
+                }
+                
+                const currentTime = (Date.now() - this.startTime) / 1000 * this.options.timeScale;
+                const tintRgb = this.hexToRgb(this.options.tint);
+                
+                this.gl.useProgram(this.program);
+                
+                // Set uniforms
+                this.gl.uniform1f(this.uniforms.time, currentTime);
+                this.gl.uniform2f(this.uniforms.resolution, this.canvas.width, this.canvas.height);
+                this.gl.uniform3f(this.uniforms.tint, tintRgb[0], tintRgb[1], tintRgb[2]);
+                this.gl.uniform1f(this.uniforms.brightness, this.options.brightness);
+                
+                // Set position attribute
+                const positionAttribute = this.gl.getAttribLocation(this.program, 'position');
+                this.gl.enableVertexAttribArray(positionAttribute);
+                this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.positionBuffer);
+                this.gl.vertexAttribPointer(positionAttribute, 2, this.gl.FLOAT, false, 0, 0);
+                
+                // Draw
+                this.gl.clearColor(0, 0, 0, 1);
+                this.gl.clear(this.gl.COLOR_BUFFER_BIT);
+                this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
+                
+                requestAnimationFrame(() => this.animate());
+            }
+
+            updateTint(color) {
+                this.options.tint = color;
+            }
+
+            destroy() {
+                if (this.resizeObserver) this.resizeObserver.disconnect();
+                if (this.gl) {
+                    this.gl.deleteProgram(this.program);
+                    this.gl.deleteBuffer(this.positionBuffer);
+                }
+                if (this.canvas && this.canvas.parentNode) {
+                    this.canvas.parentNode.removeChild(this.canvas);
+                }
             }
         }
 
@@ -1696,7 +1942,6 @@ HTML_TEMPLATE = """
             constructor() {
                 this.initObserver();
                 this.initLightCursorTrail();
-                this.initMatrixRain();
                 this.initParticles();
                 this.initScrollProgress();
                 this.initLetterReveal();
@@ -1842,57 +2087,6 @@ HTML_TEMPLATE = """
 
                 document.addEventListener('mouseenter', () => {
                     trails.forEach((trail, index) => trail.element.style.opacity = 0.3 - index * 0.1);
-                });
-            }
-
-            initMatrixRain() {
-                const canvas = document.getElementById('matrix-canvas');
-                const ctx = canvas.getContext('2d');
-                window.matrixCtx = ctx;
-                window.matrixColor = '#3b82f6';
-                
-                const updateCanvasSize = () => {
-                    canvas.width = window.innerWidth;
-                    canvas.height = window.innerHeight;
-                };
-
-                updateCanvasSize();
-
-                const matrix = "ABCDEFGHIJKLMNOPQRSTUVWXYZ123456789@#$%^&*()*&^%+-/~{[|`]}";
-                const matrixArray = matrix.split("");
-
-                const fontSize = 10;
-                const columns = canvas.width / fontSize;
-
-                const drops = [];
-                for (let x = 0; x < columns; x++) {
-                    drops[x] = 1;
-                }
-
-                function drawMatrix() {
-                    ctx.fillStyle = 'rgba(0, 0, 0, 0.04)';
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-                    
-                    ctx.fillStyle = window.matrixColor;
-                    ctx.font = fontSize + 'px monospace';
-
-                    for (let i = 0; i < drops.length; i++) {
-                        const text = matrixArray[Math.floor(Math.random() * matrixArray.length)];
-                        ctx.fillText(text, i * fontSize, drops[i] * fontSize);
-
-                        if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
-                            drops[i] = 0;
-                        }
-                        drops[i]++;
-                    }
-                }
-
-                const matrixInterval = setInterval(drawMatrix, 100);
-
-                window.addEventListener('resize', () => {
-                    updateCanvasSize();
-                    clearInterval(matrixInterval);
-                    setInterval(drawMatrix, 100);
                 });
             }
 
@@ -2116,11 +2310,36 @@ HTML_TEMPLATE = """
         `;
         document.head.appendChild(dynamicStyles);
 
-        // Initialize loading screen first, then other animations
+        // Initialize everything when DOM is ready
         document.addEventListener('DOMContentLoaded', () => {
-            // Prevent scrolling during loading
-            document.body.style.overflow = 'hidden';
-            new LoadingManager();
+            // Initialize theme manager
+            new ThemeManager();
+            
+            // Initialize text trail
+            const textTrailContainer = document.getElementById('textTrailContainer');
+            if (textTrailContainer) {
+                window.textTrailInstance = new TextTrail(textTrailContainer, {
+                    text: "Mydd",
+                    fontFamily: "system-ui, -apple-system, sans-serif",
+                    fontWeight: "900",
+                    textColor: "#3b82f6"
+                });
+            }
+            
+            // Initialize faulty terminal
+            const faultyTerminalContainer = document.getElementById('faultyTerminal');
+            if (faultyTerminalContainer) {
+                window.faultyTerminalInstance = new FaultyTerminal(faultyTerminalContainer, {
+                    tint: "#3b82f6",
+                    brightness: 0.6,
+                    timeScale: 0.5,
+                    scanlineIntensity: 0.4
+                });
+            }
+            
+            // Initialize other animations
+            new AdvancedAnimations();
+            new InteractionEffects();
         });
     </script>
 </body>
@@ -2150,29 +2369,39 @@ def api_info():
             'Community Management'
         ],
         'server_info': {
-            'port': int(os.environ.get('PORT', 5000)),
+            'port': 5000,
             'framework': 'Flask',
             'status': 'running'
         }
     }
 
+def open_browser():
+    """Automatically opens browser after server startup"""
+    time.sleep(1.5)
+    webbrowser.open(f'http://127.0.0.1:5000')
+
 if __name__ == '__main__':
-    # Configuration pour production sur Render
-    PORT = int(os.environ.get('PORT', 5000))
-    HOST = '0.0.0.0'  # Nécessaire pour Render
-    DEBUG = False  # Mode production
+    HOST = '127.0.0.1'
+    PORT = 5000
+    DEBUG = True
     
-    print("🚀 Starting Flask server for production...")
-    print(f"📡 Server listening on port: {PORT}")
-    print("🌐 Ready for deployment on Render")
+    print("🚀 Starting Flask server...")
+    print(f"🔗 Server available at: http://{HOST}:{PORT}")
+    print(f"🌐 Site will open automatically in your browser")
+    print("🛑 To stop server: Ctrl+C")
+    
+    threading.Thread(target=open_browser).start()
     
     try:
         app.run(
             host=HOST, 
             port=PORT, 
-            debug=DEBUG
+            debug=DEBUG,
+            use_reloader=False
         )
+    except KeyboardInterrupt:
+        print("\n🛑 Server stopped by user")
     except Exception as e:
-        print(f"❌ Error starting server: {e}")
+        print(f"⚠️ Error starting server: {e}")
         
-    print("\n✅ Server stopped")
+    print("\n✅ Thank you for using Mydd Portfolio Server!")
